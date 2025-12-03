@@ -1,4 +1,4 @@
-# Ignore large files
-*.mat
-*.npy
-*.csv
+# Ignore large raw data files
+raw/*.mat
+raw/*.npy
+raw/*.csv
