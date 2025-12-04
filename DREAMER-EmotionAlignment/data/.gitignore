@@ -2,3 +2,7 @@
 raw/*.mat
 raw/*.npy
 raw/*.csv
+
+# Ignore large processed files
+processed/*.pkl
+processed/*.npy
