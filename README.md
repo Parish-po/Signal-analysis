@@ -79,8 +79,9 @@ Features extracted **separately** for baseline and stimulus periods:
 **Asymmetry Features**:
 - **FAA (Frontal Alpha Asymmetry)**: 
   ```
-  FAA = (Right_Alpha - Left_Alpha) / (Right_Alpha + Left_Alpha)
+  FAA = ln(Right_Alpha) - ln(Left_Alpha)
   ```
+  - Calculated using frontal electrode pairs: AF3/AF4, F7/F8, F3/F4
   - Right frontal: withdrawal emotions (fear, sadness)
   - Left frontal: approach emotions (happiness, excitement)
 
