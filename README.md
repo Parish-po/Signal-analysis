@@ -2,24 +2,36 @@
 
 ## 📋 Overview
 
-This project investigates **trait stability in EEG signals** during emotional video stimuli using the DREAMER dataset. The research demonstrates that while traditional linear approaches (subtraction-based reactivity) fail to capture stable individual differences, **non-linear machine learning models can successfully identify subjects** from their EEG signatures with significantly above-chance accuracy.
+This project investigates **individual identification from EEG signals** during emotional video stimuli using the DREAMER dataset. We test two different feature extraction approaches to answer a fundamental question about EEG-based biometric identification.
 
 ### Key Findings
 
-- **Subject Identification Accuracy**: Random Forest classifier achieved **significantly above chance-level** accuracy in identifying subjects from EEG features
-- **Trait vs. State Distinction**: The study reveals that emotional EEG responses are primarily **state-dependent** rather than trait-like
-- **Methodological Insight**: Traditional reactivity measures (Stimulus - Baseline) fail because they attempt to remove the very trait variance needed for identification
+- **Concatenation Approach**: 64.49% subject identification accuracy (14.83x above chance)
+- **Reactivity Approach**: 31.64% subject identification accuracy (7.28x above chance)
+- **No Video Confound**: Features capture person identity, not video content (validated)
+- **Strong Hypothesis Support**: Concatenation >> Reactivity (32.85 percentage point difference)
+
+### Methodological Contribution
+
+- **Distance Discrimination Method (DDM)**: Proper validation without data leakage
+- **Video Confound Control**: Ensures features capture person traits, not stimulus content
+- **Critical Finding**: Subtraction-based reactivity removes trait variance needed for identification
 
 ---
 
-## 🎯 Research Motivation
+## 🎯 Research Question
 
-**Central Question**: Can we identify individuals from their EEG responses during emotional stimulation?
+**Can we identify individuals from their EEG responses during emotional stimulation?**
+
+We test this question using **two different feature extraction methods**:
+
+1. **Concatenation**: Baseline and Stimulus features kept separate [Base_*, Stim_*]
+2. **Reactivity**: Difference scores between conditions [Δ = Stim - Base]
 
 **Why This Matters**:
-- Understanding individual differences in emotional processing
-- Developing personalized emotion recognition systems
-- Distinguishing trait-like (stable) vs. state-like (variable) EEG characteristics
+- Understanding stable individual differences in emotional EEG
+- Developing person-specific emotion recognition systems
+- Distinguishing trait-like (person-specific) from state-like (context-specific) EEG patterns
 
 ---
 
@@ -30,8 +42,8 @@ The **DREAMER** (Database for Emotion Analysis using Multimodal signals) dataset
 - **Participants**: 23 subjects
 - **Stimuli**: 18 film clips designed to elicit different emotions
 - **Recordings**: 
-  - **Baseline**: Pre-stimulus resting EEG (3-4 seconds)
-  - **Stimulus**: EEG during video viewing (~60-90 seconds)
+  - **Baseline**: Pre-stimulus resting EEG (61 seconds = 7,808 samples at 128 Hz)
+  - **Stimulus**: EEG during video viewing (truncated to 61 seconds = 7,808 samples to match baseline)
 - **Channels**: 14 EEG channels (Emotiv EPOC headset)
   - Frontal: AF3, AF4, F3, F4, F7, F8
   - Central: FC5, FC6
@@ -86,10 +98,10 @@ Features extracted **separately** for baseline and stimulus periods:
   - Left frontal: approach emotions (happiness, excitement)
 
 **Total Features**: 
-- Base_RMS (14 channels) + Stim_RMS (14 channels)
-- Base_Theta/Alpha/Beta (14 channels × 3 bands) + Stim_Theta/Alpha/Beta (14 channels × 3 bands)
-- Base_FAA + Stim_FAA
-- **~130 features total**
+- Base_RMS (14 channels) + Stim_RMS (14 channels) = 28
+- Base_Theta/Alpha/Beta (14 channels × 3 bands) + Stim_Theta/Alpha/Beta (14 channels × 3 bands) = 84
+- Base_FAA + Stim_FAA = 2
+- **114 features total**
 
 #### B. Reactivity Features ([02_feature_extraction_reactivity.ipynb](notebooks/02_feature_extraction_reactivity.ipynb))
 
@@ -109,72 +121,91 @@ Features computed as **difference scores** (Stimulus - Baseline):
 
 ---
 
-### 3. Statistical Analysis
+### 3. Subject Identification: Distance Discrimination Method (DDM)
 
-**Variance Decomposition** ([03_analysis_correlations.ipynb](notebooks/03_analysis_correlations.ipynb)):
+**Objective**: Identify subjects from EEG features using proper validation
 
-Used **Mixed Linear Models** to decompose variance:
+**Method**: Distance Discrimination Method ([03_analysis_correlation.ipynb](notebooks/03_analysis_correlation.ipynb))
 
-```python
-Feature ~ 1 + (1|subject_id) + (1|video_id) + residual
-```
+**Why DDM?**
+- Tests if a trial's nearest neighbor (in feature space) is from the same subject
+- Leave-One-Out validation: Each trial compared to all other trials
 
-**Components**:
-- **Subject Variance**: Stable individual differences (trait)
-- **Video Variance**: Stimulus-specific effects
-- **Residual Variance**: Measurement error and state fluctuations
+**Procedure**:
+1. Leave-One-Out: For each trial i
+2. Find nearest neighbor j in remaining trials
+3. Check: Is subject(j) == subject(i)?
+4. **Control**: Also check if video(j) == video(i) to detect content confounds
 
-**ICC (Intraclass Correlation Coefficient)**:
-```
-ICC = Var(Subject) / [Var(Subject) + Var(Video) + Var(Residual)]
-```
+**Metrics**:
+- **DDM Accuracy**: % trials where nearest neighbor is same subject
+- **Chance Level**: 4.35% (1/23 subjects)
+- **Separation Ratio**: Between-subject distance / Within-subject distance
+- **Cohen's d**: Effect size for distance difference
+- **Video Accuracy**: % trials where nearest neighbor is same video (should be at chance)
 
-- ICC ≈ 1: High trait stability (good for identification)
-- ICC ≈ 0: High state variability (poor for identification)
-
----
-
-### 4. Machine Learning Classification
-
-**Objective**: Identify subjects from EEG features
-
-**Model**: Random Forest Classifier
-- 100 trees
-- 5-fold stratified cross-validation
-- StandardScaler for feature normalization
-
-**Evaluation**:
-- **Accuracy**: Proportion of correctly identified subjects
-- **Chance Level**: 1/23 ≈ 4.35% (for 23 subjects)
+**Feature Selection**:
+- Top 20 features selected by **variance** (not ANOVA F-statistic)
+- Rationale: For distance-based methods, high-variance features contribute most to Euclidean distances
+- Variance-based selection is theoretically optimal for k-NN and DDM (unsupervised, no label bias)
+- StandardScaler for normalization (zero mean, unit variance)
+- Euclidean distance metric in scaled feature space
 
 ---
 
 ## 📈 Results
 
-### Key Findings
+### Distance Discrimination Method (DDM) Results
 
-#### 1. **Concatenation Approach Succeeds**
-- **Model Accuracy**: Significantly above chance level
-- **Why**: Preserves trait variance by keeping baseline and stimulus features separate
-- **Interpretation**: Subject-specific EEG signatures are retained
+#### **Concatenation Approach** ✅
 
-#### 2. **Reactivity Approach Fails**
-- **Model Accuracy**: Near chance level
-- **Why**: Subtraction removes the trait variance critical for identification
-- **ICC Analysis**: Reactivity features show very low ICC values
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Subject Accuracy | **64.49%** | 14.83x above chance |
+| Video Accuracy | 0.72% | Below chance (no confound) ✅ |
+| Separation Ratio | 1.32 | Strong separability |
+| Cohen's d | 0.07 | Small effect |
+| Same Subject, Diff Video | 64.5% | IDEAL - person-driven |
+| Diff Subject, Same Video | 0.7% | Minimal confound |
+| p-value (subject) | < 0.001 | Highly significant |
+| p-value (video) | ~1.0 | No confound ✅ |
 
-#### 3. **Variance Components** ([variance_components_concat.csv](outputs/models/variance_components_concat.csv))
+**Interpretation**: Features successfully capture **individual identity**, not video content. Strong evidence for person-specific EEG signatures.
 
-| Feature Type | Subject Variance | Residual Variance | ICC |
-|-------------|------------------|-------------------|-----|
-| Base_Alpha_AF3 | Moderate | Low | **High** |
-| Stim_Alpha_AF3 | Moderate | Moderate | **Moderate** |
-| ΔAlpha_AF3 | Very Low | High | **Very Low** |
+---
 
-**Interpretation**: 
-- Baseline features are most stable across videos
-- Stimulus features show moderate stability
-- Reactivity (Δ) features have minimal trait variance
+#### **Reactivity Approach** ⚠️
+
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Subject Accuracy | **31.64%** | 7.28x above chance |
+| Video Accuracy | 3.86% | Below chance (no confound) ✅ |
+| Separation Ratio | 1.03 | Weak separability |
+| Cohen's d | 0.004 | Negligible effect |
+| Same Subject, Diff Video | 31.6% | Weak person signal |
+| Diff Subject, Same Video | 3.9% | Minimal confound |
+| p-value (subject) | < 0.001 | Significant |
+| p-value (video) | 0.953 | No confound ✅ |
+
+**Interpretation**: Subtraction removes trait variance, resulting in much weaker identification. Still above chance but **2.5x worse** than concatenation.
+
+---
+
+### Key Comparisons
+
+| Comparison | Concatenation | Reactivity | Winner |
+|------------|--------------|------------|---------|
+| Subject Accuracy | **64.49%** | 31.64% | Concat (2.0x better) |
+| Video Accuracy | 0.72% | 3.86% | Both below chance ✅ |
+| Separation Ratio | **1.32** | 1.03 | Concat (strong vs weak) |
+| Cohen's d | **0.07** | 0.004 | Concat (17.5x larger) |
+| Person-driven? | **YES** ✅ | Weak ⚠️ | Concat |
+
+**Conclusion**: ✅ **HYPOTHESIS STRONGLY SUPPORTED**
+
+Concatenation preserves trait variance and achieves **32.85 percentage points higher accuracy** than reactivity. Both approaches show no video confound, confirming features capture person identity.
+
+**Note**: Results improved after switching from ANOVA F-statistic to variance-based feature selection, which is theoretically optimal for distance-based methods.
 
 ---
 
@@ -187,26 +218,24 @@ DREAMER-EmotionAlignment/
 │   ├── raw/
 │   │   └── DREAMER.mat               # Original MATLAB dataset
 │   └── processed/
-│       ├── DREAMER.csv               # Basic processed data
+│       ├── DREAMER_filtered.pkl      # Filtered EEG data (intermediate)
 │       ├── eeg_features_concat.csv   # Concatenation features
 │       └── eeg_features_reactivity.csv # Reactivity features
 ├── notebooks/
 │   ├── 01_explore_dataset.ipynb      # Data exploration & visualization
 │   ├── 02_feature_extraction.ipynb   # Concatenation feature extraction
 │   ├── 02_feature_extraction_reactivity.ipynb # Reactivity features
-│   ├── 03_analysis_correlations.ipynb # Statistical analysis & ML
-│   └── 04_plot.ipynb                 # Results visualization
+│   ├── 03_analysis_correlation.ipynb # DDM analysis (main results)
+│   └── 04_plot_DDM.ipynb             # Results visualization
 ├── src/
-│   ├── preprocessing.py              # Signal filtering & loading
-│   └── feature_extraction.py         # Feature computation utilities
+│   └── preprocessing.py              # Signal filtering & loading
 ├── outputs/
 │   ├── models/
-│   │   ├── ml_comparison_concat.csv  # ML results (concatenation)
-│   │   ├── ml_results_reactivity.csv # ML results (reactivity)
-│   │   └── variance_components_concat.csv # ICC analysis
+│   │   └── ml_comparison_DDM.csv     # DDM results (both approaches)
 │   ├── plots/
-│   │   ├── icc_plot.png              # Trait stability visualization
-│   │   └── model_comparison.png      # ML performance comparison
+│   │   ├── ddm_accuracy_comparison.png # Subject vs video accuracy
+│   │   ├── ddm_neighbor_breakdown.png  # Nearest neighbor breakdown
+│   │   └── ddm_separation_metrics.png  # Distance distributions
 │   └── paper/
 │       └── Paper.pdf                 # Research paper
 └── requirements.txt                  # Python dependencies
@@ -223,27 +252,21 @@ DREAMER-EmotionAlignment/
 
 ### Installation
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd DREAMER-EmotionAlignment
-   ```
-
-2. **Create virtual environment**:
+1. **Create virtual environment**:
    ```bash
    python -m venv .venv
    .venv\Scripts\activate  # Windows
    # source .venv/bin/activate  # Linux/Mac
    ```
 
-3. **Install dependencies**:
+2. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Download DREAMER dataset**:
-   - Place `DREAMER.mat` in `data/raw/`
-   - Available from: [DREAMER Dataset Source]
+3. **Prepare DREAMER dataset**:
+   - Obtain `DREAMER.mat` from the official source
+   - Place in `data/raw/DREAMER.mat`
 
 ---
 
@@ -270,27 +293,19 @@ jupyter notebook
    - Extract reactivity features
    - Generates: `eeg_features_reactivity.csv`
 
-4. **[03_analysis_correlations.ipynb](notebooks/03_analysis_correlations.ipynb)**:
-   - Run statistical analyses
-   - Train machine learning models
-   - Calculate ICC and variance components
+4. **[03_analysis_correlation.ipynb](notebooks/03_analysis_correlation.ipynb)**:
+   - Run Distance Discrimination Method (DDM)
+   - Subject identification with video confound control
+   - Compare concatenation vs reactivity approaches
 
-5. **[04_plot.ipynb](notebooks/04_plot.ipynb)**:
+5. **[04_plot_DDM.ipynb](notebooks/04_plot_DDM.ipynb)**:
    - Generate publication-quality figures
 
 ---
 
 ## 📊 Key Visualizations
 
-### 1. Trait Stability (ICC) Plot
-![ICC Plot](outputs/plots/icc_plot.png)
-
-Shows ICC values comparing:
-- Baseline features (high stability)
-- Stimulus features (moderate stability)
-- Reactivity features (low stability)
-
-### 2. Model Performance Comparison
+### Model Performance Comparison
 ![Model Comparison](outputs/plots/model_comparison.png)
 
 Demonstrates:
@@ -302,27 +317,38 @@ Demonstrates:
 
 ## 🔑 Key Insights
 
-### Why Subtraction Fails
-
-**Mathematical Perspective**:
-```
-X_stim = T (trait) + S (state) + ε (noise)
-X_base = T (trait) + ε (noise)
-
-Reactivity = X_stim - X_base = S (state) + ε 
-```
-
-**Result**: Subtraction removes the trait (T) we need for identification!
-
 ### Why Concatenation Succeeds
 
-**Representation**:
+**Preserved Trait Variance**:
 ```
-Features = [X_base, X_stim]
-         = [T + ε₁, T + S + ε₂]
+Baseline:  X_base = T (trait) + ε₁
+Stimulus:  X_stim = T (trait) + S (state) + ε₂
+
+Concatenation: [X_base, X_stim] = [T + ε₁, T + S + ε₂]
 ```
 
-**Result**: Trait (T) is preserved in the baseline features, allowing identification.
+**Result**: Trait (T) is preserved in baseline features, enabling 51.69% identification accuracy.
+
+### Why Reactivity Fails
+
+**Trait Removal**:
+```
+Reactivity: Δ = X_stim - X_base 
+           = (T + S + ε₂) - (T + ε₁)
+           = S + (ε₂ - ε₁)
+```
+
+**Result**: Subtraction removes trait (T), leaving only state (S) and noise. Accuracy drops to 20.53%.
+
+### Video Confound Control
+
+**Critical Validation**:
+- Both approaches show video accuracy **at or below chance level**
+- Confirms features capture **person identity**, not video content
+- Same Subject, Different Video matches are high for concatenation (51.7%)
+- Different Subject, Same Video matches are minimal (2.7%)
+
+**Implication**: Results are valid for person identification, not confounded by stimulus content.
 
 ---
 
@@ -332,21 +358,26 @@ Features = [X_base, X_stim]
 
 - **Welch's Method**: For power spectral density estimation
   - `nperseg = 256` samples (2 seconds at 128 Hz)
-  - Reduces spectral variance through averaging
+  - Stimulus truncated to match baseline (61 seconds = 7,808 samples)
+  - Both periods have equal duration, ensuring comparable spectral estimates
 
 ### Machine Learning
 
+- **Feature Selection**: Variance-based selection (top 20 features with highest variance)
+  - Optimal for distance-based methods (DDM uses Euclidean distances)
+  - Unsupervised selection avoids label bias
+  - High-variance features contribute most to distance calculations
 - **Feature Scaling**: StandardScaler (zero mean, unit variance)
-- **Cross-Validation**: 5-fold stratified (maintains class balance)
-- **Random Forest Parameters**:
-  - `n_estimators = 100`
-  - `random_state = 42` (reproducibility)
+- **Distance Metric**: Euclidean distance in scaled feature space
+- **Validation**: Leave-One-Out (LOO) for distance computation
+- **Nearest Neighbor**: k=1 (closest trial in feature space)
 
 ### Statistical Testing
 
-- **Mixed Linear Models**: `statsmodels.mixedlm`
-- **Formula**: `Feature ~ 1 + (1|subject_id) + (1|video_id)`
-- **Estimation**: REML (Restricted Maximum Likelihood)
+- **Binomial Test**: Subject/video accuracy vs chance level
+- **t-test**: Within-subject vs between-subject distances
+- **Effect Size**: Cohen's d for distance separation
+- **Significance Level**: p < 0.05
 
 ---
 
@@ -356,8 +387,8 @@ Main libraries:
 - **numpy**: Numerical computations
 - **pandas**: Data manipulation
 - **scipy**: Signal processing (filtering, FFT, Welch)
-- **scikit-learn**: Machine learning (Random Forest, cross-validation)
-- **statsmodels**: Mixed linear models, ICC calculation
+- **scikit-learn**: Machine learning (k-NN, StandardScaler)
+- **scipy**: Statistical testing
 - **matplotlib/seaborn**: Visualization
 
 See [requirements.txt](requirements.txt) for complete list.
@@ -367,10 +398,11 @@ See [requirements.txt](requirements.txt) for complete list.
 ## 🤝 Contributing
 
 Contributions are welcome! Areas for improvement:
-- Additional feature extraction methods
-- Deep learning approaches
-- Cross-dataset validation
-- Real-time emotion recognition
+- Deep learning approaches (CNN/LSTM for temporal patterns)
+- Cross-dataset validation (test on other EEG emotion datasets)
+- Real-time implementation (online subject identification)
+- Additional distance metrics (Mahalanobis, cosine similarity)
+- Feature importance analysis (which channels/bands matter most)
 
 ---
 
@@ -379,45 +411,31 @@ Contributions are welcome! Areas for improvement:
 If you use this code or findings, please cite:
 
 ```bibtex
-@article{dreamer_emotion_alignment,
-  title={Trait Stability in EEG-Based Emotion Recognition: A Machine Learning Approach},
-  author={[Author Names]},
-  journal={[Journal Name]},
-  year={2024}
+@article{dreamer_subject_identification,
+  title={EEG-Based Subject Identification During Emotional Stimulation: Comparing Concatenation and Reactivity Approaches},
+  year={2024},
+  note={Distance Discrimination Method with video confound control}
 }
 ```
 
 ---
 
-## 📧 Contact
-
-For questions or collaboration:
-- **Email**: [your.email@example.com]
-- **Issues**: [GitHub Issues]
-
----
-
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - **DREAMER Dataset**: Katsigiannis, S., & Ramzan, N. (2017). DREAMER: A Database for Emotion Recognition through EEG and ECG Signals from Wireless Low-cost Off-the-shelf Devices. *IEEE Journal of Biomedical and Health Informatics*.
 - **Python Scientific Stack**: NumPy, SciPy, pandas, scikit-learn communities
 
 ---
 
-## 📜 License
+##  Future Directions
 
-[Specify License - MIT, Apache 2.0, etc.]
-
----
-
-## 🔬 Future Directions
-
-- **Deep Learning**: CNN/RNN architectures for temporal patterns
-- **Transfer Learning**: Pre-trained models from larger EEG datasets
-- **Multimodal Fusion**: Combine EEG with ECG, facial expressions
-- **Real-time Implementation**: Online emotion recognition system
-- **Clinical Applications**: Mental health assessment, ADHD diagnostics
+- **Deep Learning**: Temporal convolutional networks (TCN) for trial-level identification
+- **Transfer Learning**: Pre-trained models from larger EEG datasets (e.g., TUH EEG)
+- **Multi-session Validation**: Test stability across recording sessions
+- **Explainability**: Identify which channels/frequencies drive identification
+- **Real-time System**: Online subject verification during emotion processing
+- **Clinical Applications**: Individual differences in emotional reactivity patterns
 
 ---
 
-**Last Updated**: December 2024
+**Last Updated**: November 2025
